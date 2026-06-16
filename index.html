@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Status Iuran Warga — Kas RT</title>
+<link rel="stylesheet" href="warga-style.css">
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div>
+      <div class="header-title">🏘️ Status Iuran Warga</div>
+      <div class="header-sub" id="header-rt">Memuat...</div>
+    </div>
+    <div class="header-right">
+      <select class="sel-bulan" id="sel-bulan" onchange="gantiPeriode()"></select>
+      <a href="admin.html" class="btn-admin">🔐 Admin</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="error-banner" id="error-banner"></div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-val" id="st-total">—</div>
+      <div class="stat-label">Total Warga (KK)</div>
+    </div>
+    <div class="stat-card">
+  <div class="stat-val" id="st-khusus-kas" style="color:#10B981; font-size:18px">—</div>
+  <div class="stat-label">Total Uang Kas RT</div>
+</div>
+    <div class="stat-card">
+      <div class="stat-val" id="st-lunas" style="color:var(--green)">—</div>
+      <div class="stat-label">Lunas Semua Iuran</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="st-belum" style="color:var(--red)">—</div>
+      <div class="stat-label">Ada Tunggakan</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" id="st-nominal" style="color:var(--blue);font-size:18px">—</div>
+      <div class="stat-label">Total Terkumpul</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="🔍  Cari nama atau no. rumah..." oninput="renderTable()" />
+    <select id="filter-status" onchange="renderTable()">
+      <option value="">Semua Status</option>
+      <option value="lunas">Lunas Semua</option>
+      <option value="belum">Ada Belum Bayar</option>
+      <option value="sebagian">Sebagian</option>
+    </select>
+  </div>
+
+  <div class="iuran-tabs" id="iuran-tabs"></div>
+
+  <div class="legend">
+    <span style="font-weight:600;color:var(--text)">Keterangan:</span>
+    <span class="legend-item"><span class="badge badge-lunas">Lunas</span> sudah bayar</span>
+    <span class="legend-item"><span class="badge badge-belum">Belum</span> belum bayar</span>
+    <span class="legend-item"><span class="badge badge-sebagian">Sebagian</span> bayar sebagian</span>
+  </div>
+
+  <div class="table-wrap">
+    <div class="loading-state" id="loading">
+      <div class="spinner"></div>
+      <div>Memuat data dari Google Sheets...</div>
+    </div>
+    <table id="tabel" style="display:none">
+      <thead><tr id="thead-row"></tr></thead>
+      <tbody id="tbody-warga"></tbody>
+    </table>
+    <div class="empty-state" id="empty-state" style="display:none">
+      <div class="empty-icon">📋</div>
+      <div>Tidak ada data yang cocok.</div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Diperbarui otomatis dari Google Sheets &nbsp;·&nbsp;
+  <a href="admin.html">Masuk sebagai Bendahara</a>
+</footer>
+
+<script src="config.js"></script>
+<script>
+// Menghubungkan variabel nominal dengan setelan NOMINAL_IURAN yang ada di config.js
+const IURAN_LIST = [
+  {key:'Kas',     label:'Kas RT',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Kas : 20000},
+  {key:'Listrik', label:'Listrik',   nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Listrik : 50000},
+  {key:'Air',     label:'Air/PAM',   nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Air : 30000},
+  {key:'Sampah',  label:'Sampah',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Sampah : 15000},
+  {key:'Keamanan',label:'Keamanan',  nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Keamanan : 25000},
+  {key:'Masjid',  label:'Masjid',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Masjid : 10000}, // ◄ TAMBAH INI
+];
+const BULAN_NAMA = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+
+let allData = [];
+let activeIuran = '';
+let selBulan = new Date().getMonth();
+let selTahun = new Date().getFullYear();
+
+// ── Init dropdown bulan ──
+(function initBulan() {
+  const sel = document.getElementById('sel-bulan');
+  const now = new Date();
+  for (let y = now.getFullYear(); y >= now.getFullYear() - 1; y--) {
+    for (let m = 11; m >= 0; m--) {
+      if (y === now.getFullYear() && m > now.getMonth()) continue;
+      const opt = document.createElement('option');
+      opt.value = y + '-' + m;
+      opt.textContent = BULAN_NAMA[m] + ' ' + y;
+      if (y === now.getFullYear() && m === now.getMonth()) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+})();
+
+function gantiPeriode() {
+  const v = document.getElementById('sel-bulan').value.split('-');
+  selTahun = parseInt(v[0]);
+  selBulan = parseInt(v[1]);
+  renderTable();
+  updateStats();
+}
+
+// ── Solusi Utama: Menggunakan Eksekusi JSONP agar Bypass CORS Cloud ──
+async function loadData() {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.trim() === "" || APPS_SCRIPT_URL.includes("GANTI_DENGAN_URL")) {
+    showError('URL Apps Script belum diisi. Buka file <code>config.js</code> dan atur nilai APPS_SCRIPT_URL.');
+    document.getElementById('loading').style.display = 'none';
+    return;
+  }
+  
+  try {
+    // Membuat nama acak unik untuk wadah fungsi penampung data
+    const callbackName = 'jsonpCallbackWarga_' + Math.round(100000 * Math.random());
+    
+    // Daftarkan fungsi ke jendela global (window) agar dapat dijangkau oleh Google Apps Script
+    window[callbackName] = function(json) {
+      allData = json.data || [];
+      document.getElementById('header-rt').textContent = json.rtName || RT_NAME || 'RT —';
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('tabel').style.display = 'table';
+      hideError();
+      buildIuranTabs();
+      renderTable();
+      updateStats();
+      
+      // Hapus sisa tag script dan fungsi global setelah selesai memuat data
+      document.body.removeChild(script);
+      delete window[callbackName];
+    };
+    
+    // Injeksi tag script dinamis ke dokumen DOM (Inti dari JSONP)
+    const script = document.createElement('script');
+    script.src = APPS_SCRIPT_URL + '?action=get&callback=' + callbackName + '&t=' + Date.now();
+    document.body.appendChild(script);
+
+  } catch(e) {
+    document.getElementById('loading').style.display = 'none';
+    showError('Gagal memuat data dari spreadsheet: ' + e.message);
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-banner');
+  el.innerHTML = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+
+function hideError() {
+  document.getElementById('error-banner').style.display = 'none';
+}
+
+function getSt(w, key) {
+  const period = selTahun + '_' + selBulan;
+  return (w.iuran && w.iuran[period] && w.iuran[period][key]) || 'Belum';
+}
+
+function allLunas(w) { return IURAN_LIST.every(i => getSt(w, i.key) === 'Lunas'); }
+function anyBelum(w) { return IURAN_LIST.some(i => getSt(w, i.key) === 'Belum'); }
+function allBelum(w) { return IURAN_LIST.every(i => getSt(w, i.key) === 'Belum'); }
+
+function buildIuranTabs() {
+  const c = document.getElementById('iuran-tabs');
+  const tabs = [{key:'', label:'Semua Iuran'}, ...IURAN_LIST];
+  c.innerHTML = tabs.map(t =>
+    `<div class="itab${t.key === activeIuran ? ' active' : ''}" onclick="setIuran('${t.key}')">${t.label}</div>`
+  ).join('');
+}
+
+function setIuran(k) { activeIuran = k; buildIuranTabs(); renderTable(); }
+
+function renderTable() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const fs = document.getElementById('filter-status').value;
+
+  let filtered = allData.filter(w => {
+    if (q && !w.nama.toLowerCase().includes(q) && !(w.no||'').toLowerCase().includes(q)) return false;
+    if (fs === 'lunas' && !allLunas(w)) return false;
+    if (fs === 'belum' && !anyBelum(w)) return false;
+    if (fs === 'sebagian' && (allLunas(w) || allBelum(w))) return false;
+    return true;
+  });
+
+  const cols = activeIuran ? [IURAN_LIST.find(i => i.key === activeIuran)] : IURAN_LIST;
+  const thead = document.getElementById('thead-row');
+  
+  // MODIFIKASI: Menambahkan header "Keterangan" untuk warga
+  thead.innerHTML = '<th style="width:36px">#</th><th>Nama</th><th style="width:60px">Rmh</th><th>Keterangan</th>' +
+    cols.map(i => `<th style="width:90px">${i.label}</th>`).join('');
+
+  const tbody = document.getElementById('tbody-warga');
+  const empty = document.getElementById('empty-state');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    tbody.innerHTML = filtered.map((w, idx) => {
+      const statusCols = cols.map(i => {
+        const st = getSt(w, i.key);
+        const cls = st === 'Lunas' ? 'badge-lunas' : st === 'Sebagian' ? 'badge-sebagian' : 'badge-belum';
+        return `<td><span class="badge ${cls}">${st}</span></td>`;
+      }).join('');
+      
+      // MODIFIKASI: Menambahkan kolom teks keterangan pada baris data warga
+      return `<tr>
+        <td style="color:var(--muted)">${idx + 1}</td>
+        <td style="font-weight:500">${w.nama}</td>
+        <td class="no-rmh">${w.no || '—'}</td>
+        <td style="color:var(--muted);font-size:12px">${w.ket || '—'}</td>
+        ${statusCols}
+      </tr>`;
+    }).join('');
+  }
+  
+  updateStatsFiltered(filtered);
+}
+
+// PERBAIKAN: Membuat fungsi kalkulasi yang adaptif mengikuti hasil pencarian kolom
+function updateStatsFiltered(dataAnggota) {
+  const total = dataAnggota.length;
+  const lunas = dataAnggota.filter(allLunas).length;
+  const belum = dataAnggota.filter(anyBelum).length;
+  
+  let nominalTotal = 0;
+  let nominalKhususKas = 0; // ◄ Variabel penampung baru untuk warga
+  
+  dataAnggota.forEach(w => IURAN_LIST.forEach(i => {
+    if (getSt(w, i.key) === 'Lunas') {
+      nominalTotal += i.nom;
+      
+      // PERBAIKAN: Hitung khusus komponen kunci 'Kas' saja
+      if (i.key === 'Kas') {
+        nominalKhususKas += i.nom;
+      }
+    }
+  }));
+  
+  document.getElementById('st-total').textContent = total;
+  document.getElementById('st-lunas').textContent = lunas;
+  document.getElementById('st-belum').textContent = belum;
+  document.getElementById('st-nominal').textContent = 'Rp ' + nominalTotal.toLocaleString('id-ID');
+  document.getElementById('st-khusus-kas').textContent = 'Rp ' + nominalKhususKas.toLocaleString('id-ID'); // ◄ Masukkan ke layar warga
+}
+
+loadData();
+// Auto-refresh setiap 2 menit dari database cloud sheets
+setInterval(loadData, 120000);
+</script>
+</body>
+</html>

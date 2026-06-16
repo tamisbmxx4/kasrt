@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Kas RT</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-icon">🔐</div>
+    <div class="login-title">Admin Bendahara RT</div>
+    <div class="login-sub">Masuk untuk mengelola data iuran warga</div>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="l-user" placeholder="bendahara" autocomplete="username"/>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="l-pass" placeholder="••••••" autocomplete="current-password"/>
+    </div>
+    <button class="btn-full btn-login" onclick="doLogin()">Masuk</button>
+    <div class="login-err" id="l-err">Username atau password salah.</div>
+    <div class="login-hint">Ubah kredensial akses di file <code>config.js</code></div>
+    <a href="index.html" class="back-link">← Kembali ke halaman warga</a>
+  </div>
+</div>
+
+<div id="app-screen">
+  <header>
+    <div>
+      <div class="h-title">🏘️ Admin — Kas RT</div>
+      <div class="h-sub" id="h-rt">Memuat...</div>
+    </div>
+    <div class="h-right">
+      <select class="sel-bulan" id="sel-bulan" onchange="gantiPeriode()"></select>
+      <button class="btn-h" onclick="bukaModalTambah()">+ Tambah</button>
+      <button class="btn-h" onclick="unduhExcelBulanIni()" style="background:var(--green)">🟢 Download Excel</button>
+      <button class="btn-h" onclick="salinWargaBulanLalu()" style="background:var(--amber)">📋 Copy Warga Bulan Lalu</button>
+      <button class="btn-h" onclick="syncData()">↻ Sync</button>
+      <button class="btn-h" onclick="doLogout()">Keluar</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="err-banner" id="err-banner"></div>
+
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-label">Total Warga</div><div class="stat-val" id="st-total">—</div><div class="stat-sub">KK terdaftar</div></div>
+      <div class="stat-card">
+  <div class="stat-label">Khusus Kas RT</div>
+  <div class="stat-val" id="st-khusus-kas" style="color:#10B981; font-size:16px">—</div>
+  <div class="stat-sub">terkumpul</div>
+</div>
+      <div class="stat-card"><div class="stat-label">Lunas Semua</div><div class="stat-val" id="st-lunas" style="color:var(--green)">—</div><div class="stat-sub">semua iuran</div></div>
+      <div class="stat-card"><div class="stat-label">Ada Tunggakan</div><div class="stat-val" id="st-belum" style="color:var(--red)">—</div><div class="stat-sub">warga</div></div>
+      <div class="stat-card"><div class="stat-label">Terkumpul</div><div class="stat-val" id="st-nom" style="color:var(--blue);font-size:16px">—</div><div class="stat-sub">bulan ini</div></div>
+    </div>
+
+    <div class="controls">
+      <input class="ctrl-input" type="text" id="search" placeholder="🔍 Cari nama atau no. rumah..." oninput="renderTable()"/>
+      <select class="ctrl-sel" id="f-status" onchange="renderTable()">
+        <option value="">Semua Status</option>
+        <option value="lunas">Lunas Semua</option>
+        <option value="belum">Ada Belum Bayar</option>
+        <option value="sebagian">Sebagian</option>
+      </select>
+    </div>
+
+    <div class="iuran-tabs" id="iuran-tabs"></div>
+
+    <div class="table-wrap">
+      <div class="loading-state" id="loading"><div class="spinner"></div>Memuat data dari Sheets...</div>
+      <table id="tabel" style="display:none">
+        <thead><tr id="thead-row"></tr></thead>
+        <tbody id="tbody-warga"></tbody>
+      </table>
+      <div class="empty-state" id="empty-state" style="display:none">
+        <div style="font-size:32px;margin-bottom:0.5rem">📋</div>
+        Belum ada data. Klik <strong>+ Tambah</strong> untuk mulai.
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="overlay" id="modal-warga">
+  <div class="modal">
+    <div class="modal-title" id="m-title">Tambah Warga Baru</div>
+    <div class="form-row" style="margin-bottom:12px">
+      <div class="form-group" style="margin:0">
+        <label>Nama Kepala Keluarga</label>
+        <input type="text" id="f-nama" placeholder="Bpk / Ibu ..."/>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>No. Rumah / Blok</label>
+        <input type="text" id="f-no" placeholder="A-01"/>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>No. HP (opsional)</label>
+      <input type="text" id="f-hp" placeholder="0812-xxxx-xxxx"/>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Keterangan Tambahan</label>
+      <input type="text" id="f-ket" placeholder="Contoh: Rumah Kontrakan, Rumah Kosong, dll"/>
+    </div>
+    <div class="section-lbl">Status Iuran Bulan Ini</div>
+    <div class="iuran-grid" id="iuran-grid"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="tutupModal()">Batal</button>
+      <button class="btn btn-primary" onclick="simpanWarga()" style="background:var(--green)">💾 Simpan ke Sheets</button>
+    </div>
+  </div>
+</div>
+
+<div class="saving" id="saving-overlay">
+  <div class="saving-box">
+    <div class="spinner"></div>
+    Menyimpan ke Google Sheets...
+  </div>
+</div>
+
+<div class="toast" id="toast-el"></div>
+
+<script src="config.js"></script>
+<script>
+// ── Map Parameter Iuran Dinamis dari config.js ─────────────────
+// MODIFIKASI: Memasukkan komponen iuran Masjid baru
+const IURAN_LIST = [
+  {key:'Kas',     label:'Kas RT',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Kas : 20000},
+  {key:'Listrik', label:'Listrik',   nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Listrik : 50000},
+  {key:'Air',     label:'Air/PAM',   nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Air : 30000},
+  {key:'Sampah',  label:'Sampah',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Sampah : 15000},
+  {key:'Keamanan',label:'Keamanan',  nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Keamanan : 25000},
+  {key:'Masjid',  label:'Masjid',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Masjid : 10000},
+];
+const BULAN_NAMA = ['Januari','Februari','Maret','April','Mei','Juni',
+                    'Juli','Agustus','September','Oktober','November','Desember'];
+const STATUS_OPT = ['Belum','Lunas','Sebagian'];
+
+
+// ── State ──────────────────────────────────────────────────────
+let allData    = [];
+let activeTab  = '';
+let editIdx    = -1;
+let selBulan   = new Date().getMonth();
+let selTahun   = new Date().getFullYear();
+
+// ── LOGIN ──────────────────────────────────────────────────────
+function doLogin() {
+  const u = document.getElementById('l-user').value.trim();
+  const p = document.getElementById('l-pass').value;
+  if (typeof ADMIN_CREDENTIALS !== 'undefined' && ADMIN_CREDENTIALS[u] && ADMIN_CREDENTIALS[u] === p) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display  = 'block';
+    initBulan();
+    syncData();
+  } else {
+    document.getElementById('l-err').style.display = 'block';
+  }
+}
+function doLogout() {
+  document.getElementById('app-screen').style.display  = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('l-pass').value = '';
+  document.getElementById('l-err').style.display = 'none';
+}
+document.getElementById('l-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+// ── PERIODE ────────────────────────────────────────────────────
+function initBulan() {
+  const sel = document.getElementById('sel-bulan');
+  sel.innerHTML = '';
+  const now = new Date();
+  for (let y = now.getFullYear(); y >= now.getFullYear()-1; y--) {
+    for (let m = 11; m >= 0; m--) {
+      if (y === now.getFullYear() && m > now.getMonth()) continue;
+      const opt = document.createElement('option');
+      opt.value = y+'-'+m;
+      opt.textContent = BULAN_NAMA[m]+' '+y;
+      if (y === now.getFullYear() && m === now.getMonth()) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+}
+function gantiPeriode() {
+  const v = document.getElementById('sel-bulan').value.split('-');
+  selTahun = parseInt(v[0]); selBulan = parseInt(v[1]);
+  renderTable(); updateStats();
+}
+function getPeriodKey() { return selTahun + '_' + selBulan; }
+
+// ── FETCH DATA (GET) ───────────────────────────────────────────
+// ── FETCH DATA (DIPERBAIKI: Menggunakan JSONP untuk Bypass CORS) ──
+async function syncData() {
+  showLoading(true);
+  hideError();
+
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.trim() === "" || APPS_SCRIPT_URL.includes("GANTI_DENGAN_URL")) {
+    showLoading(false);
+    showError('URL Apps Script kosong atau belum diatur dengan benar di dalam file <code>config.js</code>.');
+    return;
+  }
+
+  try {
+    // Membuat nama fungsi callback dinamis yang unik
+    const callbackName = 'jsonpCallbackAdmin_' + Math.round(100000 * Math.random());
+    
+    // Daftarkan fungsi ke objek window global agar bisa menerima data dari Google Sheets
+    window[callbackName] = function(json) {
+      allData = json.data || [];
+      document.getElementById('h-rt').textContent = json.rtName || RT_NAME || 'RT —';
+      showLoading(false);
+      
+      // Tampilkan tabel jika data berhasil masuk
+      document.getElementById('tabel').style.display = 'table';
+      
+      buildTabs(); 
+      renderTable(); 
+      updateStats();
+      toast('✓ Data berhasil dimuat dari Cloud', 'ok');
+      
+      // Bersihkan elemen skrip setelah selesai digunakan
+      document.body.removeChild(script);
+      delete window[callbackName];
+    };
+    
+    // Buat elemen script dinamis untuk memicu bypass CORS (Teknik JSONP)
+    const script = document.createElement('script');
+    script.src = APPS_SCRIPT_URL + '?action=get&callback=' + callbackName + '&t=' + Date.now();
+    document.body.appendChild(script);
+
+  } catch(e) {
+    showLoading(false);
+    showError('Gagal mengambil data dari cloud: <strong>' + e.message + '</strong><br>' +
+      'Langkah evaluasi: Periksa jaringan internet Anda atau pastikan URL config.js sudah benar.');
+  }
+}
+
+function unduhExcelBulanIni() {
+  if (allData.length === 0) {
+    toast('Tidak ada data untuk diunduh!', 'err');
+    return;
+  }
+
+  // 1. Ambil teks nama bulan untuk penamaan file hasil download
+  const namaBulanAktif = BULAN_NAMA[selBulan];
+  const konfirmasi = confirm(`Unduh data laporan Kas RT untuk periode ${namaBulanAktif} ${selTahun}?`);
+  if (!konfirmasi) return;
+
+  // 2. Siapkan array tampung untuk menyusun baris matriks Excel
+  const barisExcel = [];
+
+  // 3. Ketik Header kolom Excel (Baris Pertama)
+  const headers = ["No", "Nama Kepala Keluarga", "No. Rumah", "Keterangan"];
+  IURAN_LIST.forEach(i => headers.push(i.label)); // Masukkan Kas RT, Listrik, Air, dll ke kanan
+  barisExcel.push(headers);
+
+  // 4. Masukkan data warga satu per satu ke bawahnya
+  allData.forEach((warga, index) => {
+    const barisBaru = [
+      index + 1,
+      warga.nama,
+      warga.no || "—",
+      warga.ket || "—"
+    ];
+
+    // Ambil status masing-masing jenis iuran untuk warga tersebut di bulan ini
+    IURAN_LIST.forEach(i => {
+      const statusIuran = getSt(warga, i.key); // Menghasilkan 'Lunas', 'Belum', atau 'Sebagian'
+      barisBaru.push(statusIuran); // ◄ PERBAIKAN: Memasukkan status iuran ke baris warga
+    });
+
+    barisExcel.push(barisBaru); // ◄ PERBAIKAN: Memasukkan baris warga utuh ke dalam matriks Excel
+  });
+
+  // 5. Proses konversi array data menjadi file spreadsheet murni (.xlsx)
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet(barisExcel);
+
+  // Mengatur estetika lebar kolom otomatis di Excel agar tulisan tidak terpotong
+  const batasLebarKolom = barisExcel[0].map((_, colIndex) => {
+    return {
+      wch: Math.max(...barisExcel.map(row => row[colIndex] ? row[colIndex].toString().length : 0)) + 3
+    };
+  });
+  worksheet['!cols'] = batasLebarKolom;
+
+  // Masukkan lembar kerja ke file excel
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Iuran");
+
+  // 6. Jalankan trigger perintah unduh otomatis pada browser komputer
+  const namaFile = `Laporan_Kas_RT_${namaBulanAktif}_${selTahun}.xlsx`;
+  XLSX.writeFile(workbook, namaFile);
+  
+  toast('✓ Excel berhasil diunduh', 'ok');
+}
+// ── KIRIM DATA (GET param) ─────────────────────────────────────
+async function callSheets(params) {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.trim() === "") {
+    toast('Gagal: Konfigurasi URL Apps Script tidak ditemukan!', 'err'); return false;
+  }
+
+  document.getElementById('saving-overlay').classList.add('show');
+  try {
+    const qs = Object.entries(params)
+      .map(([k,v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v))
+      .join('&');
+    const url = APPS_SCRIPT_URL + '?' + qs + '&t=' + Date.now();
+
+    await fetch(url, { method:'GET', mode:'no-cors' });
+    return true;
+  } catch(e) {
+    toast('Gagal kirim: ' + e.message, 'err');
+    return false;
+  } finally {
+    document.getElementById('saving-overlay').classList.remove('show');
+  }
+}
+
+// ── STATUS HELPERS ─────────────────────────────────────────────
+function getSt(w, key) {
+  return (w.iuran && w.iuran[getPeriodKey()] && w.iuran[getPeriodKey()][key]) || 'Belum';
+}
+function allLunas(w) { return IURAN_LIST.every(i => getSt(w,i.key) === 'Lunas'); }
+function anyBelum(w) { return IURAN_LIST.some(i  => getSt(w,i.key) === 'Belum'); }
+function allBelum(w) { return IURAN_LIST.every(i => getSt(w,i.key) === 'Belum'); }
+
+// ── TABS ───────────────────────────────────────────────────────
+function buildTabs() {
+  const c = document.getElementById('iuran-tabs');
+  const tabs = [{key:'',label:'Semua Iuran'}, ...IURAN_LIST];
+  c.innerHTML = tabs.map(t =>
+    `<div class="itab${t.key===activeTab?' active':''}" onclick="setTab('${t.key}')">${t.label}</div>`
+  ).join('');
+}
+function setTab(k) { activeTab=k; buildTabs(); renderTable(); }
+
+// ── TABLE ──────────────────────────────────────────────────────
+function renderTable() {
+  buildTabs();
+  const q  = document.getElementById('search').value.toLowerCase();
+  const fs = document.getElementById('f-status').value;
+
+  const filtered = allData.filter(w => {
+    if (q && !w.nama.toLowerCase().includes(q) && !(w.no||'').toLowerCase().includes(q)) return false;
+    if (fs==='lunas'    && !allLunas(w)) return false;
+    if (fs==='belum'    && !anyBelum(w)) return false;
+    if (fs==='sebagian' && (allLunas(w)||allBelum(w))) return false;
+    return true;
+  });
+
+  const cols = activeTab ? [IURAN_LIST.find(i=>i.key===activeTab)] : IURAN_LIST;
+  
+  // MODIFIKASI: Menambahkan header "Keterangan" di sebelah kolom Rumah
+  document.getElementById('thead-row').innerHTML =
+    '<th style="width:32px">#</th><th>Nama</th><th style="width:55px">Rmh</th><th>Keterangan</th>' +
+    cols.map(i=>`<th style="width:88px">${i.label}</th>`).join('') +
+    '<th style="width:95px;text-align:center">Aksi</th>';
+
+  const tbody = document.getElementById('tbody-warga');
+  const empty = document.getElementById('empty-state');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    if (allData.length === 0) {
+      empty.style.display = 'block';
+    } else {
+      empty.style.display = 'none';
+      tbody.innerHTML = `<tr><td colspan="20" style="text-align:center;padding:2rem;color:var(--muted)">Tidak ada data yang cocok.</td></tr>`;
+    }
+  } else {
+    empty.style.display = 'none';
+    tbody.innerHTML = filtered.map((w, idx) => {
+      const ri = allData.indexOf(w);
+      const statusCols = cols.map(i => {
+        const st  = getSt(w, i.key);
+        const cls = st==='Lunas' ? 'badge-lunas' : st==='Sebagian' ? 'badge-sebagian' : 'badge-belum';
+        return `<td><span class="badge ${cls}">${st}</span></td>`;
+      }).join('');
+      
+      // MODIFIKASI: Menambahkan baris `<td>${w.ket || '—'}</td>` di bawah kolom rumah
+      return `<tr>
+        <td style="color:var(--muted)">${idx+1}</td>
+        <td style="font-weight:500">${w.nama}</td>
+        <td style="color:var(--muted);font-size:12px">${w.no||'—'}</td>
+        <td style="color:var(--muted);font-size:12px">${w.ket||'—'}</td>
+        ${statusCols}
+        <td style="text-align:center">
+          <button class="btn-sm" style="background:var(--blue);color:#fff;margin-right:3px" onclick="bukaEdit(${ri})">Edit</button>
+          <button class="btn-sm" style="background:var(--red);color:#fff" onclick="hapus(${ri})">Hapus</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+  updateStats();
+}
+
+function updateStats() {
+  document.getElementById('st-total').textContent = allData.length;
+  document.getElementById('st-lunas').textContent = allData.filter(allLunas).length;
+  document.getElementById('st-belum').textContent = allData.filter(anyBelum).length;
+  
+  let nomTotal = 0;
+  let nomKhususKas = 0; // ◄ Variabel penampung baru
+  
+  allData.forEach(w => IURAN_LIST.forEach(i => { 
+    if (getSt(w, i.key) === 'Lunas') {
+      nomTotal += i.nom; // Menghitung total gabungan semua iuran
+      
+      // PERBAIKAN: Jika komponen yang lunas adalah 'Kas', hitung secara terpisah
+      if (i.key === 'Kas') {
+        nomKhususKas += i.nom;
+      }
+    }
+  }));
+  
+  document.getElementById('st-nom').textContent = 'Rp ' + nomTotal.toLocaleString('id-ID');
+  document.getElementById('st-khusus-kas').textContent = 'Rp ' + nomKhususKas.toLocaleString('id-ID'); // ◄ Masukkan ke layar
+}
+
+// ── MODAL ──────────────────────────────────────────────────────
+function buildIuranGrid(w) {
+  return IURAN_LIST.map(i => {
+    const cur = getSt(w||{}, i.key);
+    // PERBAIKAN: Berikan fallback (i.nom || 0) sebelum memanggil .toLocaleString()
+    const nominalAman = i.nom || 0; 
+    
+    return `<div class="iuran-item">
+      <div>
+        <div class="iuran-lbl">${i.label}</div>
+        <div class="iuran-nom">Rp ${nominalAman.toLocaleString('id-ID')}</div>
+      </div>
+      <select id="st-${i.key}">
+        ${STATUS_OPT.map(s=>`<option value="${s}"${s===cur?' selected':''}>${s}</option>`).join('')}
+      </select>
+    </div>`;
+  }).join('');
+}
+
+function bukaModalTambah() {
+  editIdx = -1;
+  document.getElementById('m-title').textContent = 'Tambah Warga Baru';
+  document.getElementById('f-nama').value = '';
+  document.getElementById('f-no').value   = '';
+  document.getElementById('f-hp').value   = '';
+  document.getElementById('f-ket').value  = ''; // MODIFIKASI: Reset input keterangan
+  document.getElementById('iuran-grid').innerHTML = buildIuranGrid(null);
+  document.getElementById('modal-warga').classList.add('open');
+}
+
+function bukaEdit(idx) {
+  editIdx = idx;
+  const w = allData[idx];
+  document.getElementById('m-title').textContent = 'Edit — ' + w.nama;
+  document.getElementById('f-nama').value = w.nama;
+  document.getElementById('f-no').value   = w.no   || '';
+  document.getElementById('f-hp').value   = w.hp   || '';
+  document.getElementById('f-ket').value  = w.ket  || ''; // MODIFIKASI: Memuat data keterangan
+  document.getElementById('iuran-grid').innerHTML = buildIuranGrid(w);
+  document.getElementById('modal-warga').classList.add('open');
+}
+
+function tutupModal() {
+  document.querySelectorAll('.overlay').forEach(o => o.classList.remove('open'));
+}
+
+async function simpanWarga() {
+  const nama = document.getElementById('f-nama').value.trim();
+  const no   = document.getElementById('f-no').value.trim();
+  const hp   = document.getElementById('f-hp').value.trim();
+  const ket  = document.getElementById('f-ket').value.trim(); // MODIFIKASI: Menangkap value input keterangan
+  if (!nama) { toast('Nama warga wajib diisi!', 'err'); return; }
+
+  const period = getPeriodKey();
+  const iuranStatus = {};
+  IURAN_LIST.forEach(i => { iuranStatus[i.key] = document.getElementById('st-'+i.key).value; });
+
+  // MODIFIKASI: Menyuntikkan parameter 'ket' ke objek kirim data
+  const params = {
+    action: editIdx === -1 ? 'add' : 'update',
+    nama, no, hp: hp||'', period, ket: ket||'',
+    ...iuranStatus
+  };
+
+  // MODIFIKASI: Menambahkan array penampung 'ket' di state lokal (Optimistic UI)
+  if (editIdx === -1) {
+    allData.push({ nama, no, hp, ket, iuran:{ [period]: iuranStatus } });
+    toast('✓ Warga ditambahkan! Menyimpan ke Sheets...', 'ok');
+  } else {
+    const w = allData[editIdx];
+    w.nama = nama; w.no = no; w.hp = hp; w.ket = ket;
+    if (!w.iuran) w.iuran = {};
+    w.iuran[period] = iuranStatus;
+    toast('✓ Data diperbarui! Menyimpan ke Sheets...', 'ok');
+  }
+
+  tutupModal();
+  renderTable();
+
+  const ok = await callSheets(params);
+  if (ok) {
+    toast('✓ Tersimpan di Google Sheets!', 'ok');
+    setTimeout(syncData, 1500);
+  }
+}
+
+async function hapus(idx) {
+  const w = allData[idx];
+  if (!confirm('Hapus data warga "' + w.nama + '"?\nSemua data periode akan dihapus.')) return;
+
+  allData.splice(idx, 1);
+  renderTable();
+  toast('Menghapus dari Sheets...', 'info');
+
+  const ok = await callSheets({ action:'delete', nama: w.nama, no: w.no });
+  if (ok) {
+    toast('✓ Warga berhasil dihapus dari Sheets', 'ok');
+    setTimeout(syncData, 1500);
+  }
+}
+
+// ── UI HELPERS ─────────────────────────────────────────────────
+function showLoading(show) {
+  document.getElementById('loading').style.display = show ? 'block' : 'none';
+  document.getElementById('tabel').style.display   = show ? 'none'  : 'table';
+}
+function showError(msg) {
+  const el = document.getElementById('err-banner');
+  el.innerHTML = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+function hideError() {
+  document.getElementById('err-banner').style.display = 'none';
+}
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast-el');
+  t.textContent = msg;
+  t.className = 'toast toast-'+type+' show';
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+async function salinWargaBulanLalu() {
+  // Cari tahu bulan lalu berdasarkan bulan yang sedang dipilih saat ini
+  let bulanLalu = selBulan - 1;
+  let tahunLalu = selTahun;
+  if (bulanLalu < 0) { bulanLalu = 11; tahunLalu--; }
+
+  const kuncibulanLalu = tahunLalu + '_' + bulanLalu;
+
+  // Ambil daftar warga unik dari data yang ada
+  const namaWargaBulanLalu = [...new Set(allData.map(w => w.nama + '||' + w.no))];
+
+  if (namaWargaBulanLalu.length === 0) {
+    toast('Tidak ada data warga di bulan-bulan sebelumnya!', 'err'); return;
+  }
+
+  if (!confirm(`Copy daftar ${namaWargaBulanLalu.length} warga ke periode ${BULAN_NAMA[selBulan]} ${selTahun}?\nStatus iuran otomatis diset "Belum".`)) return;
+
+  document.getElementById('saving-overlay').classList.add('show');
+
+  // Kirim data satu per satu ke Sheets secara massal
+  for (let item of namaWargaBulanLalu) {
+    const [nama, no] = item.split('||');
+    const wargaAsli = allData.find(w => w.nama === nama && w.no === no);
+
+    const params = {
+      action: 'add',
+      nama: nama, no: no, hp: wargaAsli.hp || '', period: getPeriodKey(),
+      Kas: 'Belum', Listrik: 'Belum', Air: 'Belum', Sampah: 'Belum', Keamanan: 'Belum', Masjid: 'Belum', ket: wargaAsli.ket || ''
+    };
+    await callSheets(params);
+  }
+
+  document.getElementById('saving-overlay').classList.remove('show');
+  toast('✓ Berhasil menyalin daftar warga!', 'ok');
+  setTimeout(syncData, 1000);
+}
+</script>
+</body>
+</html>
