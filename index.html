@@ -30,9 +30,9 @@
       <div class="stat-label">Total Warga (KK)</div>
     </div>
     <div class="stat-card">
-  <div class="stat-val" id="st-khusus-kas" style="color:#10B981; font-size:18px">—</div>
-  <div class="stat-label">Total Uang Kas RT</div>
-</div>
+      <div class="stat-val" id="st-khusus-kas" style="color:#10B981; font-size:18px">—</div>
+      <div class="stat-label">Total Uang Kas RT</div>
+    </div>
     <div class="stat-card">
       <div class="stat-val" id="st-lunas" style="color:var(--green)">—</div>
       <div class="stat-label">Lunas Semua Iuran</div>
@@ -96,7 +96,7 @@ const IURAN_LIST = [
   {key:'Air',     label:'Air/PAM',   nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Air : 30000},
   {key:'Sampah',  label:'Sampah',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Sampah : 15000},
   {key:'Keamanan',label:'Keamanan',  nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Keamanan : 25000},
-  {key:'Masjid',  label:'Masjid',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Masjid : 10000}, // ◄ TAMBAH INI
+  {key:'Masjid',  label:'Masjid',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Masjid : 10000},
 ];
 const BULAN_NAMA = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 
@@ -126,7 +126,8 @@ function gantiPeriode() {
   selTahun = parseInt(v[0]);
   selBulan = parseInt(v[1]);
   renderTable();
-  updateStats();
+  // PERBAIKAN: Memanggil nama fungsi kalkulasi statistik terfilter yang benar
+  updateStatsFiltered(allData);
 }
 
 // ── Solusi Utama: Menggunakan Eksekusi JSONP agar Bypass CORS Cloud ──
@@ -138,10 +139,8 @@ async function loadData() {
   }
   
   try {
-    // Membuat nama acak unik untuk wadah fungsi penampung data
     const callbackName = 'jsonpCallbackWarga_' + Math.round(100000 * Math.random());
     
-    // Daftarkan fungsi ke jendela global (window) agar dapat dijangkau oleh Google Apps Script
     window[callbackName] = function(json) {
       allData = json.data || [];
       document.getElementById('header-rt').textContent = json.rtName || RT_NAME || 'RT —';
@@ -150,14 +149,14 @@ async function loadData() {
       hideError();
       buildIuranTabs();
       renderTable();
-      updateStats();
       
-      // Hapus sisa tag script dan fungsi global setelah selesai memuat data
+      // PERBAIKAN: Memanggil fungsi statistik baru yang sinkron dengan penampung array warga
+      updateStatsFiltered(allData);
+      
       document.body.removeChild(script);
       delete window[callbackName];
     };
     
-    // Injeksi tag script dinamis ke dokumen DOM (Inti dari JSONP)
     const script = document.createElement('script');
     script.src = APPS_SCRIPT_URL + '?action=get&callback=' + callbackName + '&t=' + Date.now();
     document.body.appendChild(script);
@@ -212,7 +211,6 @@ function renderTable() {
   const cols = activeIuran ? [IURAN_LIST.find(i => i.key === activeIuran)] : IURAN_LIST;
   const thead = document.getElementById('thead-row');
   
-  // MODIFIKASI: Menambahkan header "Keterangan" untuk warga
   thead.innerHTML = '<th style="width:36px">#</th><th>Nama</th><th style="width:60px">Rmh</th><th>Keterangan</th>' +
     cols.map(i => `<th style="width:90px">${i.label}</th>`).join('');
 
@@ -231,7 +229,6 @@ function renderTable() {
         return `<td><span class="badge ${cls}">${st}</span></td>`;
       }).join('');
       
-      // MODIFIKASI: Menambahkan kolom teks keterangan pada baris data warga
       return `<tr>
         <td style="color:var(--muted)">${idx + 1}</td>
         <td style="font-weight:500">${w.nama}</td>
@@ -242,23 +239,22 @@ function renderTable() {
     }).join('');
   }
   
+  // Memperbarui hitungan statistik di atas meja tabel secara dinamis mengikuti isian filter pencarian
   updateStatsFiltered(filtered);
 }
 
-// PERBAIKAN: Membuat fungsi kalkulasi yang adaptif mengikuti hasil pencarian kolom
 function updateStatsFiltered(dataAnggota) {
   const total = dataAnggota.length;
   const lunas = dataAnggota.filter(allLunas).length;
   const belum = dataAnggota.filter(anyBelum).length;
   
   let nominalTotal = 0;
-  let nominalKhususKas = 0; // ◄ Variabel penampung baru untuk warga
+  let nominalKhususKas = 0; 
   
   dataAnggota.forEach(w => IURAN_LIST.forEach(i => {
     if (getSt(w, i.key) === 'Lunas') {
       nominalTotal += i.nom;
       
-      // PERBAIKAN: Hitung khusus komponen kunci 'Kas' saja
       if (i.key === 'Kas') {
         nominalKhususKas += i.nom;
       }
@@ -269,7 +265,7 @@ function updateStatsFiltered(dataAnggota) {
   document.getElementById('st-lunas').textContent = lunas;
   document.getElementById('st-belum').textContent = belum;
   document.getElementById('st-nominal').textContent = 'Rp ' + nominalTotal.toLocaleString('id-ID');
-  document.getElementById('st-khusus-kas').textContent = 'Rp ' + nominalKhususKas.toLocaleString('id-ID'); // ◄ Masukkan ke layar warga
+  document.getElementById('st-khusus-kas').textContent = 'Rp ' + nominalKhususKas.toLocaleString('id-ID');
 }
 
 loadData();
