@@ -244,32 +244,31 @@ function renderTable() {
 
 function updateStatsFiltered(dataAnggota) {
   const total = dataAnggota.length;
-  const lunas = dataAnggota.filter(allLunas).length;
-  const belum = dataAnggota.filter(anyBelum).length;
   
-  let nominalTotal = 0;
-  let nominalKhususKas = 0; 
+  // Inisialisasi celengan dompet iuran warga (pastikan mulai dari angka 0)
+  let nominalKas = 0;
+  let nominalAir = 0;
+  let nominalSampah = 0;
+  let nominalMasjid = 0;
   
   dataAnggota.forEach(w => IURAN_LIST.forEach(i => {
     if (getSt(w, i.key) === 'Lunas') {
-      // 1. Hitung akumulasi murni komponen kunci 'Kas' untuk kartu khusus Kas RT
-      if (i.key === 'Kas') {
-        nominalKhususKas += i.nom;
-      }
-
-      // 2. PERBAIKAN: Jika sedang membuka tab iuran tertentu, hitung iuran yang aktif itu saja. 
-      //    Jika sedang di tab "Semua Iuran", hitung total semuanya secara global.
-      if (activeIuran === '' || i.key === activeIuran) {
-        nominalTotal += i.nom;
-      }
+      const uangMasuk = Number(i.nom) || 0; // Mengamankan agar tipe data wajib angka murni
+      
+      // Memilah total uang masuk berdasarkan kategori masing-masing
+      if (i.key === 'Kas') nominalKas += uangMasuk;
+      if (i.key === 'Air') nominalAir += uangMasuk;
+      if (i.key === 'Sampah') nominalSampah += uangMasuk;
+      if (i.key === 'Masjid') nominalMasjid += uangMasuk;
     }
   }));
   
-  document.getElementById('st-total').textContent = total;
-  document.getElementById('st-lunas').textContent = lunas;
-  document.getElementById('st-belum').textContent = belum;
-  document.getElementById('st-nominal').textContent = 'Rp ' + nominalTotal.toLocaleString('id-ID');
-  document.getElementById('st-khusus-kas').textContent = 'Rp ' + nominalKhususKas.toLocaleString('id-ID');
+  // Kirim hasil kalkulasi dinamis ke elemen ID layar index.html
+  if(document.getElementById('st-total')) document.getElementById('st-total').textContent = total;
+  if(document.getElementById('st-khusus-kas')) document.getElementById('st-khusus-kas').textContent = 'Rp ' + nominalKas.toLocaleString('id-ID');
+  if(document.getElementById('st-khusus-air')) document.getElementById('st-khusus-air').textContent = 'Rp ' + nominalAir.toLocaleString('id-ID');
+  if(document.getElementById('st-khusus-sampah')) document.getElementById('st-khusus-sampah').textContent = 'Rp ' + nominalSampah.toLocaleString('id-ID');
+  if(document.getElementById('st-khusus-masjid')) document.getElementById('st-khusus-masjid').textContent = 'Rp ' + nominalMasjid.toLocaleString('id-ID');
 }
 
 loadData();
