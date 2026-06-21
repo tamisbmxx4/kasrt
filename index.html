@@ -92,10 +92,8 @@
 // Menghubungkan variabel nominal dengan setelan NOMINAL_IURAN yang ada di config.js
 const IURAN_LIST = [
   {key:'Kas',     label:'Kas RT',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Kas : 20000},
-  {key:'Listrik', label:'Listrik',   nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Listrik : 50000},
   {key:'Air',     label:'Air/PAM',   nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Air : 30000},
   {key:'Sampah',  label:'Sampah',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Sampah : 15000},
-  {key:'Keamanan',label:'Keamanan',  nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Keamanan : 25000},
   {key:'Masjid',  label:'Masjid',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Masjid : 10000},
 ];
 const BULAN_NAMA = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
