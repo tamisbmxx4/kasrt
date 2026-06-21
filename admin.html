@@ -29,7 +29,7 @@
   </div>
 </div>
 
-<div id="app-screen">
+<div id="app-screen" style="display:none">
   <header>
     <div>
       <div class="h-title">🏘️ Admin — Kas RT</div>
@@ -51,10 +51,10 @@
     <div class="stats-row">
       <div class="stat-card"><div class="stat-label">Total Warga</div><div class="stat-val" id="st-total">—</div><div class="stat-sub">KK terdaftar</div></div>
       <div class="stat-card">
-  <div class="stat-label">Khusus Kas RT</div>
-  <div class="stat-val" id="st-khusus-kas" style="color:#10B981; font-size:16px">—</div>
-  <div class="stat-sub">terkumpul</div>
-</div>
+        <div class="stat-label">Khusus Kas RT</div>
+        <div class="stat-val" id="st-khusus-kas" style="color:#10B981; font-size:16px">—</div>
+        <div class="stat-sub">terkumpul</div>
+      </div>
       <div class="stat-card"><div class="stat-label">Lunas Semua</div><div class="stat-val" id="st-lunas" style="color:var(--green)">—</div><div class="stat-sub">semua iuran</div></div>
       <div class="stat-card"><div class="stat-label">Ada Tunggakan</div><div class="stat-val" id="st-belum" style="color:var(--red)">—</div><div class="stat-sub">warga</div></div>
       <div class="stat-card"><div class="stat-label">Terkumpul</div><div class="stat-val" id="st-nom" style="color:var(--blue);font-size:16px">—</div><div class="stat-sub">bulan ini</div></div>
@@ -125,20 +125,18 @@
 
 <div class="toast" id="toast-el"></div>
 
-<script src="config.js"></script>
+<script src="config.js?v=1.2"></script>
 <script>
 // ── Map Parameter Iuran Dinamis dari config.js ─────────────────
-// MODIFIKASI: Memasukkan komponen iuran Masjid baru
+// PERBAIKAN: Listrik dan Keamanan dihapus dari array iuran utama
 const IURAN_LIST = [
   {key:'Kas',     label:'Kas RT',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Kas : 20000},
   {key:'Air',     label:'Air/PAM',   nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Air : 30000},
   {key:'Sampah',  label:'Sampah',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Sampah : 15000},
   {key:'Masjid',  label:'Masjid',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Masjid : 10000},
 ];
-const BULAN_NAMA = ['Januari','Februari','Maret','April','Mei','Juni',
-                    'Juli','Agustus','September','Oktober','November','Desember'];
+const BULAN_NAMA = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const STATUS_OPT = ['Belum','Lunas','Sebagian'];
-
 
 // ── State ──────────────────────────────────────────────────────
 let allData    = [];
@@ -192,7 +190,6 @@ function gantiPeriode() {
 function getPeriodKey() { return selTahun + '_' + selBulan; }
 
 // ── FETCH DATA (GET) ───────────────────────────────────────────
-// ── FETCH DATA (DIPERBAIKI: Menggunakan JSONP untuk Bypass CORS) ──
 async function syncData() {
   showLoading(true);
   hideError();
@@ -204,16 +201,12 @@ async function syncData() {
   }
 
   try {
-    // Membuat nama fungsi callback dinamis yang unik
     const callbackName = 'jsonpCallbackAdmin_' + Math.round(100000 * Math.random());
     
-    // Daftarkan fungsi ke objek window global agar bisa menerima data dari Google Sheets
     window[callbackName] = function(json) {
       allData = json.data || [];
       document.getElementById('h-rt').textContent = json.rtName || RT_NAME || 'RT —';
       showLoading(false);
-      
-      // Tampilkan tabel jika data berhasil masuk
       document.getElementById('tabel').style.display = 'table';
       
       buildTabs(); 
@@ -221,20 +214,17 @@ async function syncData() {
       updateStats();
       toast('✓ Data berhasil dimuat dari Cloud', 'ok');
       
-      // Bersihkan elemen skrip setelah selesai digunakan
       document.body.removeChild(script);
       delete window[callbackName];
     };
     
-    // Buat elemen script dinamis untuk memicu bypass CORS (Teknik JSONP)
     const script = document.createElement('script');
     script.src = APPS_SCRIPT_URL + '?action=get&callback=' + callbackName + '&t=' + Date.now();
     document.body.appendChild(script);
 
   } catch(e) {
     showLoading(false);
-    showError('Gagal mengambil data dari cloud: <strong>' + e.message + '</strong><br>' +
-      'Langkah evaluasi: Periksa jaringan internet Anda atau pastikan URL config.js sudah benar.');
+    showError('Gagal mengambil data dari cloud: <strong>' + e.message + '</strong>');
   }
 }
 
@@ -244,42 +234,27 @@ function unduhExcelBulanIni() {
     return;
   }
 
-  // 1. Ambil teks nama bulan untuk penamaan file hasil download
   const namaBulanAktif = BULAN_NAMA[selBulan];
   const konfirmasi = confirm(`Unduh data laporan Kas RT untuk periode ${namaBulanAktif} ${selTahun}?`);
   if (!konfirmasi) return;
 
-  // 2. Siapkan array tampung untuk menyusun baris matriks Excel
   const barisExcel = [];
-
-  // 3. Ketik Header kolom Excel (Baris Pertama)
   const headers = ["No", "Nama Kepala Keluarga", "No. Rumah", "Keterangan"];
-  IURAN_LIST.forEach(i => headers.push(i.label)); // Masukkan Kas RT, Listrik, Air, dll ke kanan
+  IURAN_LIST.forEach(i => headers.push(i.label)); 
   barisExcel.push(headers);
 
-  // 4. Masukkan data warga satu per satu ke bawahnya
   allData.forEach((warga, index) => {
-    const barisBaru = [
-      index + 1,
-      warga.nama,
-      warga.no || "—",
-      warga.ket || "—"
-    ];
-
-    // Ambil status masing-masing jenis iuran untuk warga tersebut di bulan ini
+    const barisBaru = [index + 1, warga.nama, warga.no || "—", warga.ket || "—"];
     IURAN_LIST.forEach(i => {
-      const statusIuran = getSt(warga, i.key); // Menghasilkan 'Lunas', 'Belum', atau 'Sebagian'
-      barisBaru.push(statusIuran); // ◄ PERBAIKAN: Memasukkan status iuran ke baris warga
+      const statusIuran = getSt(warga, i.key); 
+      barisBaru.push(statusIuran); 
     });
-
-    barisExcel.push(barisBaru); // ◄ PERBAIKAN: Memasukkan baris warga utuh ke dalam matriks Excel
+    barisExcel.push(barisBaru); 
   });
 
-  // 5. Proses konversi array data menjadi file spreadsheet murni (.xlsx)
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.aoa_to_sheet(barisExcel);
 
-  // Mengatur estetika lebar kolom otomatis di Excel agar tulisan tidak terpotong
   const batasLebarKolom = barisExcel[0].map((_, colIndex) => {
     return {
       wch: Math.max(...barisExcel.map(row => row[colIndex] ? row[colIndex].toString().length : 0)) + 3
@@ -287,16 +262,13 @@ function unduhExcelBulanIni() {
   });
   worksheet['!cols'] = batasLebarKolom;
 
-  // Masukkan lembar kerja ke file excel
   XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Iuran");
-
-  // 6. Jalankan trigger perintah unduh otomatis pada browser komputer
   const namaFile = `Laporan_Kas_RT_${namaBulanAktif}_${selTahun}.xlsx`;
   XLSX.writeFile(workbook, namaFile);
   
   toast('✓ Excel berhasil diunduh', 'ok');
 }
-// ── KIRIM DATA (GET param) ─────────────────────────────────────
+
 async function callSheets(params) {
   if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.trim() === "") {
     toast('Gagal: Konfigurasi URL Apps Script tidak ditemukan!', 'err'); return false;
@@ -353,7 +325,6 @@ function renderTable() {
 
   const cols = activeTab ? [IURAN_LIST.find(i=>i.key===activeTab)] : IURAN_LIST;
   
-  // MODIFIKASI: Menambahkan header "Keterangan" di sebelah kolom Rumah
   document.getElementById('thead-row').innerHTML =
     '<th style="width:32px">#</th><th>Nama</th><th style="width:55px">Rmh</th><th>Keterangan</th>' +
     cols.map(i=>`<th style="width:88px">${i.label}</th>`).join('') +
@@ -380,7 +351,6 @@ function renderTable() {
         return `<td><span class="badge ${cls}">${st}</span></td>`;
       }).join('');
       
-      // MODIFIKASI: Menambahkan baris `<td>${w.ket || '—'}</td>` di bawah kolom rumah
       return `<tr>
         <td style="color:var(--muted)">${idx+1}</td>
         <td style="font-weight:500">${w.nama}</td>
@@ -397,34 +367,35 @@ function renderTable() {
   updateStats();
 }
 
+// PERBAIKAN: Hitungan nominal total adaptif dengan Tab yang sedang diklik bendahara
 function updateStats() {
   document.getElementById('st-total').textContent = allData.length;
   document.getElementById('st-lunas').textContent = allData.filter(allLunas).length;
   document.getElementById('st-belum').textContent = allData.filter(anyBelum).length;
   
   let nomTotal = 0;
-  let nomKhususKas = 0; // ◄ Variabel penampung baru
+  let nomKhususKas = 0; 
   
   allData.forEach(w => IURAN_LIST.forEach(i => { 
     if (getSt(w, i.key) === 'Lunas') {
-      nomTotal += i.nom; // Menghitung total gabungan semua iuran
-      
-      // PERBAIKAN: Jika komponen yang lunas adalah 'Kas', hitung secara terpisah
       if (i.key === 'Kas') {
         nomKhususKas += i.nom;
+      }
+      // Hanya tambahkan nominal jika berada di tab global atau tab iuran itu sendiri
+      if (activeTab === '' || i.key === activeTab) {
+        nomTotal += i.nom; 
       }
     }
   }));
   
   document.getElementById('st-nom').textContent = 'Rp ' + nomTotal.toLocaleString('id-ID');
-  document.getElementById('st-khusus-kas').textContent = 'Rp ' + nomKhususKas.toLocaleString('id-ID'); // ◄ Masukkan ke layar
+  document.getElementById('st-khusus-kas').textContent = 'Rp ' + nomKhususKas.toLocaleString('id-ID');
 }
 
 // ── MODAL ──────────────────────────────────────────────────────
 function buildIuranGrid(w) {
   return IURAN_LIST.map(i => {
     const cur = getSt(w||{}, i.key);
-    // PERBAIKAN: Berikan fallback (i.nom || 0) sebelum memanggil .toLocaleString()
     const nominalAman = i.nom || 0; 
     
     return `<div class="iuran-item">
@@ -445,7 +416,7 @@ function bukaModalTambah() {
   document.getElementById('f-nama').value = '';
   document.getElementById('f-no').value   = '';
   document.getElementById('f-hp').value   = '';
-  document.getElementById('f-ket').value  = ''; // MODIFIKASI: Reset input keterangan
+  document.getElementById('f-ket').value  = ''; 
   document.getElementById('iuran-grid').innerHTML = buildIuranGrid(null);
   document.getElementById('modal-warga').classList.add('open');
 }
@@ -457,7 +428,7 @@ function bukaEdit(idx) {
   document.getElementById('f-nama').value = w.nama;
   document.getElementById('f-no').value   = w.no   || '';
   document.getElementById('f-hp').value   = w.hp   || '';
-  document.getElementById('f-ket').value  = w.ket  || ''; // MODIFIKASI: Memuat data keterangan
+  document.getElementById('f-ket').value  = w.ket  || ''; 
   document.getElementById('iuran-grid').innerHTML = buildIuranGrid(w);
   document.getElementById('modal-warga').classList.add('open');
 }
@@ -470,21 +441,19 @@ async function simpanWarga() {
   const nama = document.getElementById('f-nama').value.trim();
   const no   = document.getElementById('f-no').value.trim();
   const hp   = document.getElementById('f-hp').value.trim();
-  const ket  = document.getElementById('f-ket').value.trim(); // MODIFIKASI: Menangkap value input keterangan
+  const ket  = document.getElementById('f-ket').value.trim(); 
   if (!nama) { toast('Nama warga wajib diisi!', 'err'); return; }
 
   const period = getPeriodKey();
   const iuranStatus = {};
   IURAN_LIST.forEach(i => { iuranStatus[i.key] = document.getElementById('st-'+i.key).value; });
 
-  // MODIFIKASI: Menyuntikkan parameter 'ket' ke objek kirim data
   const params = {
     action: editIdx === -1 ? 'add' : 'update',
     nama, no, hp: hp||'', period, ket: ket||'',
     ...iuranStatus
   };
 
-  // MODIFIKASI: Menambahkan array penampung 'ket' di state lokal (Optimistic UI)
   if (editIdx === -1) {
     allData.push({ nama, no, hp, ket, iuran:{ [period]: iuranStatus } });
     toast('✓ Warga ditambahkan! Menyimpan ke Sheets...', 'ok');
@@ -540,15 +509,13 @@ function toast(msg, type='ok') {
   t.className = 'toast toast-'+type+' show';
   setTimeout(() => t.classList.remove('show'), 3000);
 }
+
+// PERBAIKAN: Fungsi salin disesuaikan dengan 4 parameter kolom iuran baru (Tanpa listrik & keamanan)
 async function salinWargaBulanLalu() {
-  // Cari tahu bulan lalu berdasarkan bulan yang sedang dipilih saat ini
   let bulanLalu = selBulan - 1;
   let tahunLalu = selTahun;
   if (bulanLalu < 0) { bulanLalu = 11; tahunLalu--; }
 
-  const kuncibulanLalu = tahunLalu + '_' + bulanLalu;
-
-  // Ambil daftar warga unik dari data yang ada
   const namaWargaBulanLalu = [...new Set(allData.map(w => w.nama + '||' + w.no))];
 
   if (namaWargaBulanLalu.length === 0) {
@@ -559,7 +526,6 @@ async function salinWargaBulanLalu() {
 
   document.getElementById('saving-overlay').classList.add('show');
 
-  // Kirim data satu per satu ke Sheets secara massal
   for (let item of namaWargaBulanLalu) {
     const [nama, no] = item.split('||');
     const wargaAsli = allData.find(w => w.nama === nama && w.no === no);
@@ -567,7 +533,7 @@ async function salinWargaBulanLalu() {
     const params = {
       action: 'add',
       nama: nama, no: no, hp: wargaAsli.hp || '', period: getPeriodKey(),
-      Kas: 'Belum', Listrik: 'Belum', Air: 'Belum', Sampah: 'Belum', Keamanan: 'Belum', Masjid: 'Belum', ket: wargaAsli.ket || ''
+      Kas: 'Belum', Air: 'Belum', Sampah: 'Belum', Masjid: 'Belum', ket: wargaAsli.ket || ''
     };
     await callSheets(params);
   }

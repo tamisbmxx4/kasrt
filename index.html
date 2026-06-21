@@ -87,7 +87,8 @@
   <a href="admin.html">Masuk sebagai Bendahara</a>
 </footer>
 
-<script src="config.js"></script>
+<!-- Ubah bagian ini -->
+<script src="config.js?v=1.2"></script>
 <script>
 // Menghubungkan variabel nominal dengan setelan NOMINAL_IURAN yang ada di config.js
 const IURAN_LIST = [
@@ -251,10 +252,15 @@ function updateStatsFiltered(dataAnggota) {
   
   dataAnggota.forEach(w => IURAN_LIST.forEach(i => {
     if (getSt(w, i.key) === 'Lunas') {
-      nominalTotal += i.nom;
-      
+      // 1. Hitung akumulasi murni komponen kunci 'Kas' untuk kartu khusus Kas RT
       if (i.key === 'Kas') {
         nominalKhususKas += i.nom;
+      }
+
+      // 2. PERBAIKAN: Jika sedang membuka tab iuran tertentu, hitung iuran yang aktif itu saja. 
+      //    Jika sedang di tab "Semua Iuran", hitung total semuanya secara global.
+      if (activeIuran === '' || i.key === activeIuran) {
+        nominalTotal += i.nom;
       }
     }
   }));
