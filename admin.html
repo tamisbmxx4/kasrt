@@ -48,7 +48,7 @@
   <main>
     <div class="err-banner" id="err-banner"></div>
 
-   <div class="stats-row">
+    <div class="stats-row">
       <div class="stat-card">
         <div class="stat-label">Total Warga</div>
         <div class="stat-val" id="st-total">—</div>
@@ -56,28 +56,24 @@
       </div>
       <div class="stat-card">
         <div class="stat-label">Khusus Kas RT</div>
-        <div class="stat-val" id="st-khusus-kas" style="color:#10B981; font-size:16px">—</div>
+        <div class="stat-val" id="st-khusus-kas" style="color:#10B981;">—</div>
         <div class="stat-sub">terkumpul</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Khusus Air/PAM</div>
-        <div class="stat-val" id="st-khusus-air" style="color:#3B82F6; font-size:16px">—</div>
+        <div class="stat-val" id="st-khusus-air" style="color:#3B82F6;">—</div>
         <div class="stat-sub">terkumpul</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Khusus Sampah</div>
-        <div class="stat-val" id="st-khusus-sampah" style="color:#F59E0B; font-size:16px">—</div>
+        <div class="stat-val" id="st-khusus-sampah" style="color:#F59E0B;">—</div>
         <div class="stat-sub">terkumpul</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Khusus Masjid</div>
-        <div class="stat-val" id="st-khusus-masjid" style="color:#8B5CF6; font-size:16px">—</div>
+        <div class="stat-val" id="st-khusus-masjid" style="color:#8B5CF6;">—</div>
         <div class="stat-sub">terkumpul</div>
       </div>
-    </div>
-      <div class="stat-card"><div class="stat-label">Lunas Semua</div><div class="stat-val" id="st-lunas" style="color:var(--green)">—</div><div class="stat-sub">semua iuran</div></div>
-      <div class="stat-card"><div class="stat-label">Ada Tunggakan</div><div class="stat-val" id="st-belum" style="color:var(--red)">—</div><div class="stat-sub">warga</div></div>
-      <div class="stat-card"><div class="stat-label">Terkumpul</div><div class="stat-val" id="st-nom" style="color:var(--blue);font-size:16px">—</div><div class="stat-sub">bulan ini</div></div>
     </div>
 
     <div class="controls">
@@ -147,8 +143,6 @@
 
 <script src="config.js?v=1.2"></script>
 <script>
-// ── Map Parameter Iuran Dinamis dari config.js ─────────────────
-// PERBAIKAN: Listrik dan Keamanan dihapus dari array iuran utama
 const IURAN_LIST = [
   {key:'Kas',     label:'Kas RT',    nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Kas : 20000},
   {key:'Air',     label:'Air/PAM',   nom: typeof NOMINAL_IURAN !== 'undefined' ? NOMINAL_IURAN.Air : 30000},
@@ -158,18 +152,20 @@ const IURAN_LIST = [
 const BULAN_NAMA = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 const STATUS_OPT = ['Belum','Lunas','Sebagian'];
 
-// ── State ──────────────────────────────────────────────────────
 let allData    = [];
 let activeTab  = '';
 let editIdx    = -1;
 let selBulan   = new Date().getMonth();
 let selTahun   = new Date().getFullYear();
 
-// ── LOGIN ──────────────────────────────────────────────────────
+// ── LOGIN (PERBAIKAN: Menyimpan Sesi Login di Browser) ─────────
 function doLogin() {
   const u = document.getElementById('l-user').value.trim();
   const p = document.getElementById('l-pass').value;
   if (typeof ADMIN_CREDENTIALS !== 'undefined' && ADMIN_CREDENTIALS[u] && ADMIN_CREDENTIALS[u] === p) {
+    localStorage.setItem('isLoggedIn', 'true');
+    localStorage.setItem('adminUser', u);
+    
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app-screen').style.display  = 'block';
     initBulan();
@@ -178,7 +174,11 @@ function doLogin() {
     document.getElementById('l-err').style.display = 'block';
   }
 }
+
 function doLogout() {
+  localStorage.removeItem('isLoggedIn');
+  localStorage.removeItem('adminUser');
+  
   document.getElementById('app-screen').style.display  = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('l-pass').value = '';
@@ -209,7 +209,7 @@ function gantiPeriode() {
 }
 function getPeriodKey() { return selTahun + '_' + selBulan; }
 
-// ── FETCH DATA (GET) ───────────────────────────────────────────
+// ── FETCH DATA (GET via JSONP) ─────────────────────────────────
 async function syncData() {
   showLoading(true);
   hideError();
@@ -387,15 +387,10 @@ function renderTable() {
   updateStats();
 }
 
-// PERBAIKAN: Hitungan nominal total adaptif dengan Tab yang sedang diklik bendahara
+// PERBAIKAN: Hitungan nominal total dompet mandiri terpisah
 function updateStats() {
   document.getElementById('st-total').textContent = allData.length;
   
-  // Mengganti pencatatan lunas & belum agar berbasis data yang tampil
-  document.getElementById('st-lunas').textContent = allData.filter(allLunas).length;
-  document.getElementById('st-belum').textContent = allData.filter(anyBelum).length;
-  
-  // Inisialisasi celengan dompet untuk masing-masing iuran
   let dompetKas = 0;
   let dompetAir = 0;
   let dompetSampah = 0;
@@ -403,7 +398,6 @@ function updateStats() {
   
   allData.forEach(w => IURAN_LIST.forEach(i => { 
     if (getSt(w, i.key) === 'Lunas') {
-      // Pilah uang masuk berdasarkan kunci masing-masing iuran
       if (i.key === 'Kas') dompetKas += i.nom;
       if (i.key === 'Air') dompetAir += i.nom;
       if (i.key === 'Sampah') dompetSampah += i.nom;
@@ -411,7 +405,6 @@ function updateStats() {
     }
   }));
   
-  // Suntikkan masing-masing total uang ke kartu statistiknya di layar
   document.getElementById('st-khusus-kas').textContent = 'Rp ' + dompetKas.toLocaleString('id-ID');
   document.getElementById('st-khusus-air').textContent = 'Rp ' + dompetAir.toLocaleString('id-ID');
   document.getElementById('st-khusus-sampah').textContent = 'Rp ' + dompetSampah.toLocaleString('id-ID');
@@ -536,7 +529,6 @@ function toast(msg, type='ok') {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-// PERBAIKAN: Fungsi salin disesuaikan dengan 4 parameter kolom iuran baru (Tanpa listrik & keamanan)
 async function salinWargaBulanLalu() {
   let bulanLalu = selBulan - 1;
   let tahunLalu = selTahun;
@@ -568,6 +560,20 @@ async function salinWargaBulanLalu() {
   toast('✓ Berhasil menyalin daftar warga!', 'ok');
   setTimeout(syncData, 1000);
 }
+
+// PERBAIKAN: Fungsi Auto-Login Instan Anti-Logout saat Refresh
+(function cekStatusLoginLama() {
+  const statusLogin = localStorage.getItem('isLoggedIn');
+  if (statusLogin === 'true') {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display  = 'block';
+    initBulan();
+    syncData();
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app-screen').style.display  = 'none';
+  }
+})();
 </script>
 </body>
 </html>

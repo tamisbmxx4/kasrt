@@ -228,11 +228,12 @@ main {
   padding: 1.25rem 1rem;
 }
 
-/* ── STATISTIK ── */
+/* ── STATISTIK (TAMPILAN DEFAULT UNTUK LAPTOP / DESKTOP) ── */
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
-  gap: 10px;
+  /* Kunci mati menjadi 5 kolom sejajar ke samping di layar lebar */
+  grid-template-columns: repeat(5, 1fr); 
+  gap: 12px;
   margin-bottom: 1.25rem;
 }
 
@@ -246,14 +247,15 @@ main {
 .stat-label {
   font-size: 11px;
   color: var(--muted);
-  font-weight: 500;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.4px;
   margin-bottom: 5px;
 }
 
 .stat-val {
-  font-size: 22px;
+  /* Di laptop, gunakan ukuran ideal agar nominal Rp 10.000.000 tidak muat/turun */
+  font-size: 20px; 
   font-weight: 700;
   color: var(--text);
 }
@@ -262,6 +264,29 @@ main {
   font-size: 11px;
   color: var(--muted);
   margin-top: 3px;
+}
+
+/* ── TAMPILAN KHUSUS HP / MOBILE (MAX 768px) ── */
+@media screen and (max-width: 768px) {
+  .stats-row {
+    /* Paksa menjadi 2 kolom berpasangan yang simetris di HP */
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px;
+  }
+  
+  /* Trik Estetika: Kartu pertama (Total Warga) dibuat melintang penuh di baris paling atas */
+  .stats-row .stat-card:first-child {
+    grid-column: span 2;
+    text-align: center;
+  }
+  
+  .stat-card {
+    padding: 0.75rem; /* Perkecil padding sedikit di HP agar menghemat ruang layar */
+  }
+  
+  .stat-val {
+    font-size: 16px; /* Ukuran teks nominal mengecil sedikit di HP agar tidak meluber keluar kotak */
+  }
 }
 
 /* ── PANEL KONTROL ── */
