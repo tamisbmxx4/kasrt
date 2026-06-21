@@ -48,13 +48,33 @@
   <main>
     <div class="err-banner" id="err-banner"></div>
 
-    <div class="stats-row">
-      <div class="stat-card"><div class="stat-label">Total Warga</div><div class="stat-val" id="st-total">—</div><div class="stat-sub">KK terdaftar</div></div>
+   <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Warga</div>
+        <div class="stat-val" id="st-total">—</div>
+        <div class="stat-sub">KK terdaftar</div>
+      </div>
       <div class="stat-card">
         <div class="stat-label">Khusus Kas RT</div>
         <div class="stat-val" id="st-khusus-kas" style="color:#10B981; font-size:16px">—</div>
         <div class="stat-sub">terkumpul</div>
       </div>
+      <div class="stat-card">
+        <div class="stat-label">Khusus Air/PAM</div>
+        <div class="stat-val" id="st-khusus-air" style="color:#3B82F6; font-size:16px">—</div>
+        <div class="stat-sub">terkumpul</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Khusus Sampah</div>
+        <div class="stat-val" id="st-khusus-sampah" style="color:#F59E0B; font-size:16px">—</div>
+        <div class="stat-sub">terkumpul</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Khusus Masjid</div>
+        <div class="stat-val" id="st-khusus-masjid" style="color:#8B5CF6; font-size:16px">—</div>
+        <div class="stat-sub">terkumpul</div>
+      </div>
+    </div>
       <div class="stat-card"><div class="stat-label">Lunas Semua</div><div class="stat-val" id="st-lunas" style="color:var(--green)">—</div><div class="stat-sub">semua iuran</div></div>
       <div class="stat-card"><div class="stat-label">Ada Tunggakan</div><div class="stat-val" id="st-belum" style="color:var(--red)">—</div><div class="stat-sub">warga</div></div>
       <div class="stat-card"><div class="stat-label">Terkumpul</div><div class="stat-val" id="st-nom" style="color:var(--blue);font-size:16px">—</div><div class="stat-sub">bulan ini</div></div>
@@ -370,26 +390,32 @@ function renderTable() {
 // PERBAIKAN: Hitungan nominal total adaptif dengan Tab yang sedang diklik bendahara
 function updateStats() {
   document.getElementById('st-total').textContent = allData.length;
+  
+  // Mengganti pencatatan lunas & belum agar berbasis data yang tampil
   document.getElementById('st-lunas').textContent = allData.filter(allLunas).length;
   document.getElementById('st-belum').textContent = allData.filter(anyBelum).length;
   
-  let nomTotal = 0;
-  let nomKhususKas = 0; 
+  // Inisialisasi celengan dompet untuk masing-masing iuran
+  let dompetKas = 0;
+  let dompetAir = 0;
+  let dompetSampah = 0;
+  let dompetMasjid = 0;
   
   allData.forEach(w => IURAN_LIST.forEach(i => { 
     if (getSt(w, i.key) === 'Lunas') {
-      if (i.key === 'Kas') {
-        nomKhususKas += i.nom;
-      }
-      // Hanya tambahkan nominal jika berada di tab global atau tab iuran itu sendiri
-      if (activeTab === '' || i.key === activeTab) {
-        nomTotal += i.nom; 
-      }
+      // Pilah uang masuk berdasarkan kunci masing-masing iuran
+      if (i.key === 'Kas') dompetKas += i.nom;
+      if (i.key === 'Air') dompetAir += i.nom;
+      if (i.key === 'Sampah') dompetSampah += i.nom;
+      if (i.key === 'Masjid') dompetMasjid += i.nom;
     }
   }));
   
-  document.getElementById('st-nom').textContent = 'Rp ' + nomTotal.toLocaleString('id-ID');
-  document.getElementById('st-khusus-kas').textContent = 'Rp ' + nomKhususKas.toLocaleString('id-ID');
+  // Suntikkan masing-masing total uang ke kartu statistiknya di layar
+  document.getElementById('st-khusus-kas').textContent = 'Rp ' + dompetKas.toLocaleString('id-ID');
+  document.getElementById('st-khusus-air').textContent = 'Rp ' + dompetAir.toLocaleString('id-ID');
+  document.getElementById('st-khusus-sampah').textContent = 'Rp ' + dompetSampah.toLocaleString('id-ID');
+  document.getElementById('st-khusus-masjid').textContent = 'Rp ' + dompetMasjid.toLocaleString('id-ID');
 }
 
 // ── MODAL ──────────────────────────────────────────────────────
